@@ -3,7 +3,7 @@
 A small Python application using GTK 3 for GNOME. It has three editable file
 paths with Browse dialogs, an output area, and a Combine button.
 
-On Debian/Ubuntu, install `python3-gi` and `gir1.2-gtk-3.0`, then run on a desktop:
+On Debian/Ubuntu, install `python3-gi`, `gir1.2-gtk-3.0`, `ffmpeg`, and `handbrake-cli`, then run on a desktop:
 
 ```sh
 /usr/bin/python3 app.py
@@ -15,19 +15,19 @@ are listed in `/tmp/mylist.txt`; leaving the third selection empty omits it.
 These fixed paths are shared, so run only one instance at a time and avoid
 selecting the destination files themselves as inputs.
 
-The demonstration command is exactly:
+Combine runs these steps, advancing only when the previous exit status is zero:
 
-```sh
-echo hi; sleep 2; cat /tmp/combined_paths.txt
-```
+1. Concatenate the selected videos with FFmpeg into `/tmp/joined.mp4`.
+2. Encode with HandBrakeCLI using x264, quality 26, the slow preset, and the
+   requested audio, anamorphic, subtitle, and language options into `/tmp/joined.mkv`.
+3. Move the MKV into the first selected file's directory. For example,
+   `/videos/holiday.mp4` produces `/videos/holiday_joined.mkv`.
+   An existing output with that name is replaced.
 
-The output area streams stdout and stderr as the command produces them, then
-displays the exit status after completion.
-After the command finishes, the three temporary MP4 copies are deleted,
-regardless of its exit status. Other MP4 files in `/tmp` are left alone.
-The application writes `mylist.txt`, not `combined_paths.txt`. Unless the latter
-already exists, the command displays `hi` followed by a missing-file error.
-This demonstration does not yet run FFmpeg or produce a combined video.
+The output area streams stdout and stderr, then displays the exit status.
+After success or failure, the three temporary MP4 copies and `joined.mp4` and
+`joined.mkv` are deleted. Other files in `/tmp` are left alone. `mylist.txt` is
+retained. The first file must exist; the third file remains optional.
 
 Run the file-preparation tests with:
 

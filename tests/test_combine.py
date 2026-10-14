@@ -2,9 +2,9 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-import subprocess
+import sys
 
-from combine import combine_files, prepare_files
+from combine import combine_files, prepare_files, run_command
 
 
 class PrepareFilesTest(unittest.TestCase):
@@ -43,8 +43,7 @@ class PrepareFilesTest(unittest.TestCase):
 class CombineFilesTest(unittest.TestCase):
     def test_streams_partial_output_before_command_finishes(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            marker = root / 'finished'
+            marker = Path(directory) / 'finished'
             received = []
 
             def on_output(text):
@@ -52,39 +51,66 @@ class CombineFilesTest(unittest.TestCase):
                 if 'hi' in text:
                     self.assertFalse(marker.exists())
 
-            command = f"printf hi; sleep 0.3; touch '{marker}'; printf done"
-            with patch('combine.prepare_files'), patch('combine.Path', return_value=root), \
-                    patch('combine.COMMAND', command):
-                output, status = combine_files(['a', 'b'], on_output=on_output)
+            script = ("import time; from pathlib import Path; "
+                      "print('hi', end='', flush=True); time.sleep(0.3); "
+                      f"Path({str(marker)!r}).touch(); print('done', end='', flush=True)")
+            output, status = run_command([sys.executable, '-c', script], on_output)
             self.assertEqual(output, 'hidone')
             self.assertEqual(''.join(received), output)
             self.assertEqual(status, 0)
             self.assertTrue(marker.exists())
 
-    def test_cleanup_after_success_failure_and_launch_error(self):
-        for status in (0, 1, None):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+    def test_pipeline_stops_on_failure_and_always_cleans_up(self):
+        for failing_step in (None, 0, 1, 2, 'launch'):
+            with self.subTest(failing_step=failing_step), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                targets = [root / f'file{n}.mp4' for n in range(1, 4)]
-                for target in targets:
-                    target.write_bytes(b'video')
-                unrelated = root / 'other.mp4'
+                work = root / 'work'
+                work.mkdir()
+                source = root / 'first video.mp4'
+                source.write_bytes(b'video')
+                unrelated = work / 'other.mp4'
                 unrelated.write_bytes(b'keep')
+                calls = []
+                received = []
 
-                def run_command(*args, **kwargs):
-                    self.assertTrue(all(target.exists() for target in targets))
-                    if status is None:
-                        raise OSError('Cannot launch shell')
-                    return subprocess.CompletedProcess(args[0], status, stdout='output')
-
-                with patch('combine.prepare_files'), patch('combine.Path', return_value=root), \
-                        patch('combine.subprocess.run', side_effect=run_command):
-                    if status is None:
-                        with self.assertRaises(OSError):
-                            combine_files(['a', 'b'])
+                def execute(command, on_output):
+                    step = len(calls)
+                    calls.append(command)
+                    if failing_step == 'launch':
+                        raise FileNotFoundError('Missing executable')
+                    text = f'step {step}'
+                    on_output(text)
+                    if step == failing_step:
+                        return text, 7
+                    if step == 0:
+                        (work / 'joined.mp4').write_bytes(b'joined')
+                    elif step == 1:
+                        (work / 'joined.mkv').write_bytes(b'encoded')
                     else:
-                        self.assertEqual(combine_files(['a', 'b']), ('output', status))
-                self.assertTrue(all(not target.exists() for target in targets))
+                        Path(command[2]).replace(command[3])
+                    return text, 0
+
+                with patch('combine.WORK_DIRECTORY', work), \
+                        patch('combine.run_command', side_effect=execute):
+                    if failing_step == 'launch':
+                        with self.assertRaises(FileNotFoundError):
+                            combine_files([str(source), str(source)], received.append)
+                    else:
+                        output, status = combine_files([str(source), str(source)], received.append)
+                        self.assertEqual(status, 0 if failing_step is None else 7)
+                        self.assertEqual(output, ''.join(received))
+                expected_calls = 3 if failing_step is None else (1 if failing_step == 'launch' else failing_step + 1)
+                self.assertEqual(len(calls), expected_calls)
+                self.assertEqual(calls[0][0], 'ffmpeg')
+                if len(calls) > 1:
+                    self.assertEqual(calls[1][0], 'HandBrakeCLI')
+                if failing_step is None:
+                    self.assertEqual((root / 'first video_joined.mkv').read_bytes(), b'encoded')
+                else:
+                    self.assertFalse((root / 'first video_joined.mkv').exists())
+                for name in ('file1.mp4', 'file2.mp4', 'file3.mp4', 'joined.mp4', 'joined.mkv'):
+                    self.assertFalse((work / name).exists())
+                self.assertEqual(source.read_bytes(), b'video')
                 self.assertEqual(unrelated.read_bytes(), b'keep')
 
 
