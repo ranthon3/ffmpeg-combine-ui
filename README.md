@@ -22,6 +22,8 @@ echo hi; sleep 2; cat /tmp/combined_paths.txt
 ```
 
 The output area displays stdout, stderr, and the exit status after completion.
+After the command finishes, the three temporary MP4 copies are deleted,
+regardless of its exit status. Other MP4 files in `/tmp` are left alone.
 The application writes `mylist.txt`, not `combined_paths.txt`. Unless the latter
 already exists, the command displays `hi` followed by a missing-file error.
 This demonstration does not yet run FFmpeg or produce a combined video.

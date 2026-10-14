@@ -27,8 +27,12 @@ def prepare_files(paths, destination=Path('/tmp')):
 
 def combine_files(paths):
     prepare_files(paths)
-    result = subprocess.run(
-        COMMAND, shell=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, text=True, check=False,
-    )
-    return result.stdout, result.returncode
+    try:
+        result = subprocess.run(
+            COMMAND, shell=True, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True, check=False,
+        )
+        return result.stdout, result.returncode
+    finally:
+        for number in range(1, 4):
+            (Path('/tmp') / f'file{number}.mp4').unlink(missing_ok=True)
