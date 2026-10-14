@@ -61,7 +61,7 @@ class CombineFilesTest(unittest.TestCase):
             self.assertTrue(marker.exists())
 
     def test_pipeline_stops_on_failure_and_always_cleans_up(self):
-        for failing_step in (None, 0, 1, 2, 'launch'):
+        for failing_step in (None, 0, 1, 2, 3, 'launch'):
             with self.subTest(failing_step=failing_step), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 work = root / 'work'
@@ -85,6 +85,8 @@ class CombineFilesTest(unittest.TestCase):
                     if step == 0:
                         (work / 'joined.mp4').write_bytes(b'joined')
                     elif step == 1:
+                        (work / 'joined720.mp4').write_bytes(b'scaled')
+                    elif step == 2:
                         (work / 'joined.mkv').write_bytes(b'encoded')
                     else:
                         Path(command[2]).replace(command[3])
@@ -99,16 +101,24 @@ class CombineFilesTest(unittest.TestCase):
                         output, status = combine_files([str(source), str(source)], received.append)
                         self.assertEqual(status, 0 if failing_step is None else 7)
                         self.assertEqual(output, ''.join(received))
-                expected_calls = 3 if failing_step is None else (1 if failing_step == 'launch' else failing_step + 1)
+                expected_calls = 4 if failing_step is None else (1 if failing_step == 'launch' else failing_step + 1)
                 self.assertEqual(len(calls), expected_calls)
                 self.assertEqual(calls[0][0], 'ffmpeg')
                 if len(calls) > 1:
-                    self.assertEqual(calls[1][0], 'HandBrakeCLI')
+                    self.assertEqual(calls[1], [
+                        'ffmpeg', '-i', str(work / 'joined.mp4'), '-filter:v',
+                        'scale=trunc(oh*a/2)*2:720', '-c:a', 'copy',
+                        str(work / 'joined720.mp4'),
+                    ])
+                if len(calls) > 2:
+                    self.assertEqual(calls[2][0:3], [
+                        'HandBrakeCLI', '-i', str(work / 'joined720.mp4'),
+                    ])
                 if failing_step is None:
                     self.assertEqual((root / 'first video_joined.mkv').read_bytes(), b'encoded')
                 else:
                     self.assertFalse((root / 'first video_joined.mkv').exists())
-                for name in ('file1.mp4', 'file2.mp4', 'file3.mp4', 'joined.mp4', 'joined.mkv'):
+                for name in ('file1.mp4', 'file2.mp4', 'file3.mp4', 'joined.mp4', 'joined720.mp4', 'joined.mkv'):
                     self.assertFalse((work / name).exists())
                 self.assertEqual(source.read_bytes(), b'video')
                 self.assertEqual(unrelated.read_bytes(), b'keep')

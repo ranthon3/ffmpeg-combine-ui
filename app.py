@@ -14,7 +14,7 @@ from combine import combine_files
 class CombineWindow(Gtk.ApplicationWindow):
     def __init__(self, application):
         super().__init__(application=application, title='Combine files')
-        self.set_default_size(600, 360)
+        self.set_default_size(1200, 360)
         layout = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         layout.set_border_width(16)
         self.add(layout)

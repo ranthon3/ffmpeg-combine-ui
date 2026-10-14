@@ -57,13 +57,16 @@ def combine_files(paths, on_output=None):
     output_path = source.with_name(f'{source.stem}_joined.mkv')
     work = WORK_DIRECTORY
     joined_mp4 = work / 'joined.mp4'
+    joined720_mp4 = work / 'joined720.mp4'
     joined_mkv = work / 'joined.mkv'
     working_files = [work / f'file{n}.mp4' for n in range(1, 4)]
-    working_files.extend([joined_mp4, joined_mkv])
+    working_files.extend([joined_mp4, joined720_mp4, joined_mkv])
     commands = [
         ['ffmpeg', '-f', 'concat', '-i', str(work / 'mylist.txt'),
          '-c', 'copy', str(joined_mp4)],
-        ['HandBrakeCLI', '-i', str(joined_mp4), '-e', 'x264', '-q', '26',
+        ['ffmpeg', '-i', str(joined_mp4), '-filter:v',
+         'scale=trunc(oh*a/2)*2:720', '-c:a', 'copy', str(joined720_mp4)],
+        ['HandBrakeCLI', '-i', str(joined720_mp4), '-e', 'x264', '-q', '26',
          '--encoder-preset', 'slow', '--aencoder', 'copy',
          '--audio-copy-mask', 'ac3,dts,dtshd', '--custom-anamorphic',
          '--keep-display-aspect', '-O', '-Neng', '-s', 'none',
@@ -73,6 +76,7 @@ def combine_files(paths, on_output=None):
     output = []
     try:
         joined_mp4.unlink(missing_ok=True)
+        joined720_mp4.unlink(missing_ok=True)
         joined_mkv.unlink(missing_ok=True)
         prepare_files(paths, work)
         for command in commands:
