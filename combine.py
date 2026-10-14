@@ -1,6 +1,7 @@
 """File preparation and the demonstration shell command."""
 
 from pathlib import Path
+import codecs
 import shutil
 import subprocess
 
@@ -25,9 +26,27 @@ def prepare_files(paths, destination=Path('/tmp')):
     (destination / 'mylist.txt').write_text(''.join(entries), encoding='utf-8')
 
 
-def combine_files(paths):
+def combine_files(paths, on_output=None):
     prepare_files(paths)
     try:
+        if on_output is not None:
+            chunks = []
+            decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+            with subprocess.Popen(
+                COMMAND, shell=True, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            ) as process:
+                while data := process.stdout.read1(4096):
+                    text = decoder.decode(data)
+                    if text:
+                        chunks.append(text)
+                        on_output(text)
+                tail = decoder.decode(b'', final=True)
+                if tail:
+                    chunks.append(tail)
+                    on_output(tail)
+                status = process.wait()
+            return ''.join(chunks), status
         result = subprocess.run(
             COMMAND, shell=True, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, check=False,

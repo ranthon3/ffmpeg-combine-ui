@@ -41,6 +41,26 @@ class PrepareFilesTest(unittest.TestCase):
 
 
 class CombineFilesTest(unittest.TestCase):
+    def test_streams_partial_output_before_command_finishes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            marker = root / 'finished'
+            received = []
+
+            def on_output(text):
+                received.append(text)
+                if 'hi' in text:
+                    self.assertFalse(marker.exists())
+
+            command = f"printf hi; sleep 0.3; touch '{marker}'; printf done"
+            with patch('combine.prepare_files'), patch('combine.Path', return_value=root), \
+                    patch('combine.COMMAND', command):
+                output, status = combine_files(['a', 'b'], on_output=on_output)
+            self.assertEqual(output, 'hidone')
+            self.assertEqual(''.join(received), output)
+            self.assertEqual(status, 0)
+            self.assertTrue(marker.exists())
+
     def test_cleanup_after_success_failure_and_launch_error(self):
         for status in (0, 1, None):
             with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:

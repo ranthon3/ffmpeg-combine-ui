@@ -21,7 +21,8 @@ The demonstration command is exactly:
 echo hi; sleep 2; cat /tmp/combined_paths.txt
 ```
 
-The output area displays stdout, stderr, and the exit status after completion.
+The output area streams stdout and stderr as the command produces them, then
+displays the exit status after completion.
 After the command finishes, the three temporary MP4 copies are deleted,
 regardless of its exit status. Other MP4 files in `/tmp` are left alone.
 The application writes `mylist.txt`, not `combined_paths.txt`. Unless the latter

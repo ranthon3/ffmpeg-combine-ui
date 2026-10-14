@@ -58,19 +58,27 @@ class CombineWindow(Gtk.ApplicationWindow):
     def on_combine(self, _button):
         paths = [entry.get_text().strip() for entry in self.entries]
         self.button.set_sensitive(False)
-        self.output.get_buffer().set_text('Running…')
+        self.output.get_buffer().set_text('')
         threading.Thread(target=self.run_combine, args=(paths,), daemon=True).start()
 
     def run_combine(self, paths):
         try:
-            output, status = combine_files(paths)
-            message = f'{output}\nExit status: {status}'
+            _output, status = combine_files(
+                paths, on_output=lambda text: GLib.idle_add(self.append_output, text),
+            )
+            message = f'\nExit status: {status}'
         except Exception as error:
-            message = f'Error: {error}'
+            message = f'\nError: {error}'
         GLib.idle_add(self.finished, message)
 
+    def append_output(self, text):
+        buffer = self.output.get_buffer()
+        buffer.insert(buffer.get_end_iter(), text)
+        self.output.scroll_to_iter(buffer.get_end_iter(), 0.0, False, 0.0, 1.0)
+        return GLib.SOURCE_REMOVE
+
     def finished(self, message):
-        self.output.get_buffer().set_text(message)
+        self.append_output(message)
         self.button.set_sensitive(True)
         return GLib.SOURCE_REMOVE
 
