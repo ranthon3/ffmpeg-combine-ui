@@ -40,9 +40,18 @@ class CombineWindow(Gtk.ApplicationWindow):
         scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scroll.add(self.output)
         layout.pack_start(scroll, True, True, 0)
+        buttons = Gtk.Box(spacing=8)
+        clear_button = Gtk.Button(label='Clear')
+        clear_button.connect('clicked', self.on_clear)
+        buttons.pack_start(clear_button, False, False, 0)
         self.button = Gtk.Button(label='Combine')
         self.button.connect('clicked', self.on_combine)
-        layout.pack_start(self.button, False, False, 0)
+        buttons.pack_start(self.button, True, True, 0)
+        layout.pack_start(buttons, False, False, 0)
+
+    def on_clear(self, _button):
+        for entry in self.entries:
+            entry.set_text('')
 
     def choose_file(self, _button, entry):
         dialog = Gtk.FileChooserDialog(
